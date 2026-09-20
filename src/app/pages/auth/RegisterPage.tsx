@@ -12,6 +12,24 @@ import {
   type DisabilityCategory,
 } from "../../utils/disability";
 
+function toErrorMessage(error: unknown): string {
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (error && typeof error === "object") {
+    const payload = error as { message?: unknown; error?: unknown };
+    if (typeof payload.message === "string" && payload.message.trim()) return payload.message.trim();
+    if (typeof payload.error === "string" && payload.error.trim()) return payload.error.trim();
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== "{}") return serialized;
+    } catch {
+      // Ignore serialization errors and fall back to a generic message.
+    }
+  }
+
+  return "Registration failed. Please try again.";
+}
+
 const initialForm = {
   fullName: "",
   email: "",
@@ -51,7 +69,7 @@ export function RegisterPage() {
         state: { message: "Registration successful. Please log in to continue." },
       });
     } catch (apiError) {
-      setError(apiError instanceof Error ? apiError.message : "Registration failed. Please try again.");
+      setError(toErrorMessage(apiError));
     } finally {
       setIsSubmitting(false);
     }

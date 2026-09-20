@@ -10,6 +10,48 @@ type RequestOptions = RequestInit & {
   retryable?: boolean;
 };
 
+function normalizeErrorMessage(value: unknown, fallback: string): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+
+  if (Array.isArray(value)) {
+    const joined = value
+      .map((item) => normalizeErrorMessage(item, ""))
+      .filter(Boolean)
+      .join("; ");
+
+    if (joined) return joined;
+  }
+
+  if (value && typeof value === "object") {
+    const maybeMessage = value instanceof Error ? value.message : null;
+    if (typeof maybeMessage === "string" && maybeMessage.trim()) {
+      return maybeMessage.trim();
+    }
+
+    const directError = (value as { error?: unknown }).error;
+    if (directError !== undefined) {
+      const normalized = normalizeErrorMessage(directError, "");
+      if (normalized) return normalized;
+    }
+
+    const directMessage = (value as { message?: unknown }).message;
+    if (typeof directMessage === "string" && directMessage.trim()) {
+      return directMessage.trim();
+    }
+
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized && serialized !== "{}") {
+        return serialized;
+      }
+    } catch {
+      // Ignore serialization failures and fall back to the provided fallback.
+    }
+  }
+
+  return fallback;
+}
+
 /**
  * Custom error class for API errors with status codes
  */
@@ -152,10 +194,10 @@ export async function apiRequest<T>(
 
     // Handle HTTP errors
     if (!response.ok) {
-      const errorMessage =
-        payload?.error ||
-        payload?.message ||
-        `Request failed with status ${response.status}`;
+      const errorMessage = normalizeErrorMessage(
+        payload?.error ?? payload?.message ?? payload,
+        `Request failed with status ${response.status}`
+      );
       const errorCode = payload?.code || "API_ERROR";
       const timestamp = payload?.timestamp;
 
